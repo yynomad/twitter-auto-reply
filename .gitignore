@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 敏感配置
+.env
+.env.local
+*.env
+
+# Cookie 和会话
+twitter_cookies.json
+*.cookies
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.bak
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 测试
+test_*.py
+*_test.py

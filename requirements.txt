@@ -1,0 +1,16 @@
+# Twitter 自动回复工具依赖
+
+# 基础依赖（Mac 自带，无需安装）
+# python3
+# subprocess
+# json
+# os
+
+# Telegram 版本需要
+requests>=2.31.0
+
+# Flask（可选，用于 webhook）
+# flask>=3.0.0
+
+# AI 回复生成（可选）
+# openai>=1.12.0
