@@ -14,10 +14,21 @@ import subprocess
 import json
 import os
 import sys
+import requests
 
 # ============== 配置 ==============
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+# 阿里云百炼 AI 配置
+AI_API_KEY = os.getenv("AI_API_KEY")  # 必须通过环境变量设置
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://coding.dashscope.aliyuncs.com/v1")
+AI_MODEL = os.getenv("AI_MODEL", "qwen3.5-plus")
+
+# 检查 AI 配置
+if not AI_API_KEY:
+    print("⚠️  警告：未设置 AI_API_KEY 环境变量，将使用模板回复")
+    print("   请设置：export AI_API_KEY='your-api-key'")
 
 # ============== 工具函数 ==============
 
@@ -190,39 +201,128 @@ def grab_tweet():
 
 # ============== 步骤 2: 生成回复 ==============
 
+def generate_replies_ai(tweet_text, tweet_author, num_replies=3):
+    """使用 AI 生成回复建议"""
+    if not AI_API_KEY:
+        return None
+    
+    prompt = f"""你是一个 Twitter 用户，需要回复一条推文。请生成 {num_replies} 条简短、自然、有趣的回复。
+
+推文作者：@{tweet_author}
+推文内容：
+{tweet_text}
+
+要求：
+- 每条回复不超过 50 个字
+- 语气自然，像真人说话
+- 可以适当使用 emoji
+- 回复风格多样化（赞同、提问、补充、幽默等）
+
+请按以下 JSON 格式返回：
+{{
+  "replies": [
+    {{"style": "赞同", "content": "回复内容 1"}},
+    {{"style": "提问", "content": "回复内容 2"}},
+    {{"style": "补充", "content": "回复内容 3"}}
+  ]
+}}"""
+
+    try:
+        response = requests.post(
+            f"{AI_BASE_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {AI_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": AI_MODEL,
+                "messages": [
+                    {"role": "system", "content": "你是一个 Twitter 用户，擅长生成简短有趣的回复。"},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.8,
+                "max_tokens": 500
+            },
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+            
+            # 尝试解析 JSON
+            import json as json_lib
+            try:
+                start = content.find('{')
+                end = content.rfind('}') + 1
+                if start >= 0 and end > start:
+                    data = json_lib.loads(content[start:end])
+                    replies = []
+                    for r in data.get("replies", []):
+                        replies.append(f"[{r.get('style', '回复')}] {r.get('content', '')}")
+                    return replies
+            except:
+                pass
+            
+            return [content]
+        else:
+            print(f"   ⚠️  AI 请求失败：{response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"   ⚠️  AI 请求异常：{e}")
+        return None
+
+
 def generate_replies(tweet):
     """生成 3 条回复建议"""
     print("\n" + "=" * 60)
     print("💡 步骤 2: 生成回复建议")
     print("=" * 60)
     
-    # 根据推文内容生成回复（这里用模板，可以接入 AI）
     text = tweet.get('text', '')
+    author = tweet.get('username', 'user')
     
-    # 简单的情绪分析
-    if '?' in text or '？' in text:
-        # 问题型推文
-        replies = [
-            "好问题！我也在想这个，蹲一个答案~ 🤔",
-            "这个得看具体情况，不过一般来说...",
-            "有人知道吗？同求解答！"
-        ]
-    elif '😂' in text or '哈哈' in text or '笑' in text:
-        # 幽默型推文
-        replies = [
-            "哈哈哈哈笑死我了😂",
-            "太真实了，无法反驳！",
-            "这个我必须点赞，太逗了~"
-        ]
+    # 尝试使用 AI 生成
+    if AI_API_KEY:
+        print("   🤖 正在使用 AI 生成回复...")
+        ai_replies = generate_replies_ai(text, author)
+        
+        if ai_replies:
+            replies = ai_replies
+            print("\n📋 AI 生成的回复建议:")
+        else:
+            print("\n   ⚠️  AI 生成失败，使用模板回复")
+            replies = None
     else:
-        # 通用型
-        replies = [
-            "确实是这样，深有同感~ 👍",
-            "第一次见到这种，长见识了！",
-            "求更多细节！👀"
-        ]
+        replies = None
     
-    print("\n📋 回复建议:")
+    # AI 失败或未配置时使用模板
+    if not replies:
+        if '?' in text or '？' in text:
+            replies = [
+                "[提问] 好问题！我也在想这个，蹲一个答案~ 🤔",
+                "[分析] 这个得看具体情况，不过一般来说...",
+                "[求助] 有人知道吗？同求解答！"
+            ]
+        elif '😂' in text or '哈哈' in text or '笑' in text:
+            replies = [
+                "[幽默] 哈哈哈哈笑死我了😂",
+                "[共鸣] 太真实了，无法反驳！",
+                "[点赞] 这个我必须点赞，太逗了~"
+            ]
+        else:
+            replies = [
+                "[赞同] 确实是这样，深有同感~ 👍",
+                "[学习] 第一次见到这种，长见识了！",
+                "[好奇] 求更多细节！👀"
+            ]
+        
+        if not AI_API_KEY:
+            print("\n📋 回复建议:")
+        else:
+            print("\n📋 模板回复:")
+    
     for i, reply in enumerate(replies, 1):
         print(f"   {i}. {reply}")
     
@@ -233,10 +333,10 @@ def generate_replies(tweet):
 def format_message(tweet, replies):
     """格式化 Telegram 消息"""
     
-    # 截断过长的推文
+    # 截断过长的推文（Telegram 限制 4096 字符，这里限制 2048 留余量）
     text = tweet.get('text', 'N/A')
-    if len(text) > 200:
-        text = text[:200] + "..."
+    if len(text) > 2048:
+        text = text[:2048] + "..."
     
     message = f"""🐦 <b>新推文发现</b>
 
