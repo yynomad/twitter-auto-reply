@@ -65,10 +65,13 @@ def send_telegram_message(text, buttons=None):
     keyboard = []
     if buttons:
         for btn in buttons:
-            keyboard.append([{
-                "text": btn["text"],
-                "callback_data": btn["data"]
-            }])
+            # 支持两种按钮类型：callback_data（回复）和 url（直接跳转）
+            button_data = {"text": btn["text"]}
+            if "url" in btn:
+                button_data["url"] = btn["url"]
+            elif "data" in btn:
+                button_data["callback_data"] = btn["data"]
+            keyboard.append([button_data])
     
     # 发送消息
     import requests
@@ -97,6 +100,79 @@ def copy_to_clipboard(text):
     """复制文本到剪贴板"""
     subprocess.run(['pbcopy'], input=text.encode('utf-8'))
     print(f"✅ 已复制到剪贴板")
+
+
+def auto_comment(tweet_url, reply_text):
+    """自动评论：打开浏览器，模拟人工操作"""
+    import time
+    import random
+    
+    print(f"\n🚀 开始自动评论...")
+    print(f"   推文：{tweet_url}")
+    print(f"   回复：{reply_text[:50]}...")
+    
+    # 步骤 1: 打开推文
+    print("\n📍 步骤 1: 打开推文 (等待 3-5 秒)")
+    subprocess.run(['open', tweet_url])
+    time.sleep(random.uniform(3, 5))
+    
+    # 步骤 2: 点击回复按钮
+    print("\n📍 步骤 2: 点击回复按钮")
+    script = '''
+    tell application "System Events"
+        tell process "Google Chrome"
+            try
+                click (first button whose description contains "Reply")
+            end try
+        end tell
+    end tell
+    '''
+    run_applescript(script)
+    time.sleep(random.uniform(2, 3))
+    
+    # 步骤 3: 等待加载
+    print("   等待评论框加载 (2-3 秒)...")
+    time.sleep(random.uniform(2, 3))
+    
+    # 步骤 4: 复制回复
+    print("\n📍 步骤 3: 复制回复内容")
+    copy_to_clipboard(reply_text)
+    time.sleep(random.uniform(1, 2))
+    
+    # 步骤 5: 粘贴
+    print("\n📍 步骤 4: 粘贴到评论框")
+    script = '''
+    tell application "System Events"
+        keystroke "v" using command down
+        delay 1
+    end tell
+    '''
+    run_applescript(script)
+    time.sleep(random.uniform(2, 3))
+    
+    # 步骤 6: 模拟思考
+    print("\n📍 步骤 5: 模拟思考 (3-6 秒)...")
+    time.sleep(random.uniform(3, 6))
+    
+    # 步骤 7: 点击发送
+    print("\n📍 步骤 6: 点击发送按钮")
+    script = '''
+    tell application "System Events"
+        tell process "Google Chrome"
+            try
+                click (first button whose description contains "Post")
+            end try
+        end tell
+    end tell
+    '''
+    run_applescript(script)
+    time.sleep(random.uniform(2, 3))
+    
+    # 步骤 8: 等待完成
+    print("\n📍 步骤 7: 等待发送完成 (2-4 秒)...")
+    time.sleep(random.uniform(2, 4))
+    
+    print("\n✅ 自动评论完成！")
 
 def open_url(url):
     """在 Chrome 中打开 URL"""
@@ -378,10 +454,10 @@ def create_buttons(tweet, replies):
             "data": f"reply_{i}"
         })
     
-    # 打开推文按钮
+    # 打开推文按钮 - 使用 url 类型，直接跳转
     buttons.append({
         "text": "🔗 打开推文",
-        "data": f"open_{tweet.get('url', '')}"
+        "url": tweet.get('url', '')
     })
     
     return buttons
@@ -389,12 +465,29 @@ def create_buttons(tweet, replies):
 # ============== 主流程 ==============
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Twitter 半自动回复")
+    parser.add_argument("--search", type=str, help="搜索关键词（如 AI, technology）")
+    parser.add_argument("--auto", action="store_true", help="启用自动评论模式")
+    args = parser.parse_args()
+    
     print("╔═══════════════════════════════════════════════════════════╗")
     print("║           🐦 Twitter 半自动回复（Telegram 版）              ║")
     print("╚═══════════════════════════════════════════════════════════╝")
     
     # 步骤 1: 抓取推文
+    if args.search:
+        print(f"\n🔍 搜索模式：{args.search}")
+        import urllib.parse
+        encoded = urllib.parse.quote(f"{args.search} -filter:replies -filter:retweets")
+        url = f"https://twitter.com/search?q={encoded}&f=live"
+        open_url(url)
+    else:
+        print("\n🏠 Home 模式")
+    
     tweet = grab_tweet()
+    
     if not tweet:
         print("\n❌ 流程终止")
         return
@@ -414,13 +507,46 @@ def main():
     msg_id = send_telegram_message(message, buttons)
     
     if msg_id:
-        print("\n✅ 完成！请在 Telegram 中:")
-        print("   1. 点击回复建议 → 自动复制到剪贴板")
-        print("   2. 点击「打开推文」→ 自动在 Chrome 中打开")
-        print("   3. 粘贴回复并发送")
+        print("\n✅ 消息已发送到 Telegram")
     else:
-        print("\n✅ 完成！已输出到控制台")
-        print("   请手动复制回复，打开推文链接发送")
+        print("\n✅ 已输出到控制台")
+    
+    # 步骤 5: 自动评论选项
+    if args.auto:
+        print("\n" + "=" * 60)
+        print("🤖 自动评论模式")
+        print("=" * 60)
+        
+        print("\n请选择回复编号 [1-3]，或按 Enter 跳过:")
+        for i, reply in enumerate(replies, 1):
+            print(f"   [{i}] {reply}")
+        
+        try:
+            choice = input("\n选择：").strip()
+            
+            if choice in ['1', '2', '3']:
+                index = int(choice) - 1
+                selected_reply = replies[index]
+                
+                print(f"\n✅ 已选择：{selected_reply}")
+                
+                # 确认
+                confirm = input("是否执行自动评论？[y/N]: ").strip().lower()
+                if confirm in ['y', 'yes']:
+                    # 执行自动评论
+                    auto_comment(tweet.get('url', ''), selected_reply)
+                else:
+                    print("\n✅ 已取消自动评论")
+            else:
+                print("\n✅ 已跳过")
+        except KeyboardInterrupt:
+            print("\n\n✅ 已取消")
+        except EOFError:
+            print("\n✅ 已跳过")
+    
+    print("\n" + "=" * 60)
+    print("✅ 全部完成！")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()
