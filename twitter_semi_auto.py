@@ -175,18 +175,42 @@ def auto_comment(tweet_url, reply_text):
     print("\n✅ 自动评论完成！")
 
 def open_url(url):
-    """在 Chrome 中打开 URL"""
-    script = f'''
+    """在 Chrome 中打开 URL（复用第 1 个标签页）"""
+    # 检查 Chrome 是否运行
+    check_script = '''
     tell application "Google Chrome"
-        activate
-        tell active tab of window 1
-            open location "{url}"
-            return URL
-        end tell
+        if not (exists window 1) then
+            return "no_window"
+        end if
+        return "ok"
     end tell
     '''
-    result = run_applescript(script)
-    print(f"✅ 已打开：{result}")
+    
+    status = run_applescript(check_script).strip()
+    
+    if status == "ok":
+        # Chrome 运行中，使用第 1 个标签页
+        script = f'''
+        tell application "Google Chrome"
+            activate
+            tell window 1
+                set active tab to tab 1
+                tell active tab
+                    set location to "{url}"
+                    delay 5
+                end tell
+            end tell
+        end tell
+        '''
+        run_applescript(script)
+        print(f"   (复用第 1 个标签页)")
+    else:
+        # Chrome 未运行，打开新窗口
+        subprocess.run(['open', '-a', 'Google Chrome', url])
+        time.sleep(5)
+        print(f"   (创建新窗口)")
+    
+    print(f"✅ 已打开：{url}")
 
 # ============== 步骤 1: 抓取推文 ==============
 
@@ -196,61 +220,94 @@ def grab_tweet():
     print("📥 步骤 1: 抓取推文")
     print("=" * 60)
     
-    script = '''
+    # 检查 Chrome 状态
+    check_script = '''
     tell application "Google Chrome"
-        activate
+        if not (exists window 1) then
+            return "no_window"
+        end if
+        return "ok"
+    end tell
+    '''
+    
+    status = run_applescript(check_script).strip()
+    
+    if status == "ok":
+        # Chrome 运行中，使用第 1 个标签页
+        script = '''
+        tell application "Google Chrome"
+            activate
+            tell window 1
+                set active tab to tab 1
+                tell active tab
+                    set location to "https://twitter.com/home"
+                    delay 5
+                end tell
+            end tell
+        end tell
+        '''
+        run_applescript(script)
+        print(f"   (复用第 1 个标签页)")
+    else:
+        # Chrome 未运行，打开新窗口
+        subprocess.run(['open', '-a', 'Google Chrome', 'https://twitter.com/home'])
+        time.sleep(5)
+        print(f"   (创建新窗口)")
+    
+    # 执行 JS 抓取推文
+    js_code = '''
+    (function() {
+        var articles = document.querySelectorAll('article[data-testid="tweet"]');
+        if (articles.length === 0) {
+            window.scrollTo(0, document.body.scrollHeight);
+            var start = Date.now();
+            while (articles.length === 0 && Date.now() - start < 5000) {
+                articles = document.querySelectorAll('article[data-testid="tweet"]');
+            }
+        }
+        
+        if (articles.length === 0) return JSON.stringify({error: 'NO_TWEETS'});
+        
+        var article = articles[0];
+        
+        var data = {
+            text: article.querySelector('div[data-testid="tweetText"]')?.innerText || 'N/A',
+            username: article.querySelector('a[href^="/"][href*="/status"]')?.href?.split('/')[3] || 'N/A',
+            name: article.querySelector('div[data-testid="User-Name"] span span')?.innerText || 'N/A',
+            url: ''
+        };
+        
+        var links = article.querySelectorAll('a[href*="/status/"]');
+        for (var link of links) {
+            if (link.href.includes('/status/')) {
+                data.url = link.href;
+                break;
+            }
+        }
+        
+        var allSpans = article.querySelectorAll('span');
+        var numbers = [];
+        for (var span of allSpans) {
+            var text = span.innerText.trim();
+            if (text && /^[0-9.]+[KMBkmb]?$/i.test(text) && text.length < 10) {
+                numbers.push(text);
+            }
+        }
+        
+        data.likes = numbers[numbers.length-2] || '0';
+        data.replies = numbers[0] || '0';
+        data.retweets = numbers[1] || '0';
+        data.views = numbers[numbers.length-1] || 'N/A';
+        
+        return JSON.stringify(data);
+    })()
+    '''
+    
+    # 通过 AppleScript 执行 JS
+    script = f'''
+    tell application "Google Chrome"
         tell active tab of window 1
-            open location "https://twitter.com/home"
-            delay 5
-            
-            set result to execute javascript "
-            (function() {
-                var articles = document.querySelectorAll('article[data-testid=\\\"tweet\\\"]');
-                if (articles.length === 0) {
-                    window.scrollTo(0, document.body.scrollHeight);
-                    var start = Date.now();
-                    while (articles.length === 0 && Date.now() - start < 5000) {
-                        articles = document.querySelectorAll('article[data-testid=\\\"tweet\\\"]');
-                    }
-                }
-                
-                if (articles.length === 0) return JSON.stringify({error: 'NO_TWEETS'});
-                
-                var article = articles[0];
-                
-                var data = {
-                    text: article.querySelector('div[data-testid=\\\"tweetText\\\"]')?.innerText || 'N/A',
-                    username: article.querySelector('a[href^=\\\"/\\\"][href*=\\\"/status\\\"]')?.href?.split('/')[3] || 'N/A',
-                    name: article.querySelector('div[data-testid=\\\"User-Name\\\"] span span')?.innerText || 'N/A',
-                    url: ''
-                };
-                
-                var links = article.querySelectorAll('a[href*=\\\"/status/\\\"]');
-                for (var link of links) {
-                    if (link.href.includes('/status/')) {
-                        data.url = link.href;
-                        break;
-                    }
-                }
-                
-                // 获取互动数据
-                var allSpans = article.querySelectorAll('span');
-                var numbers = [];
-                for (var span of allSpans) {
-                    var text = span.innerText.trim();
-                    if (text && /^[0-9.]+[KMBkmb]?$/i.test(text) && text.length < 10) {
-                        numbers.push(text);
-                    }
-                }
-                
-                data.likes = numbers[numbers.length-2] || '0';
-                data.replies = numbers[0] || '0';
-                data.retweets = numbers[1] || '0';
-                data.views = numbers[numbers.length-1] || 'N/A';
-                
-                return JSON.stringify(data);
-            })();
-            "
+            set result to execute javascript "{js_code}"
             return result
         end tell
     end tell
