@@ -15,6 +15,20 @@ import json
 import os
 import sys
 import requests
+import time
+import random
+
+# 自动加载 .env 文件
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(SCRIPT_DIR, '.env')
+
+if os.path.exists(ENV_FILE):
+    with open(ENV_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                os.environ.setdefault(key.strip(), value.strip())
 
 # ============== 配置 ==============
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -533,33 +547,119 @@ def main():
     print("║           🐦 Twitter 半自动回复（Telegram 版）              ║")
     print("╚═══════════════════════════════════════════════════════════╝")
     
-    # 步骤 1: 抓取推文
+    tweet = None
+    tweet_url = None
+    
+    # 步骤 1: 获取推文
+    print("\n📍 步骤 1: 获取推文")
+    print("=" * 60)
+    
     if args.search:
-        print(f"\n🔍 搜索模式：{args.search}")
+        print(f"🔍 搜索模式：{args.search}")
+        # 打开搜索页面
         import urllib.parse
         encoded = urllib.parse.quote(f"{args.search} -filter:replies -filter:retweets")
         url = f"https://twitter.com/search?q={encoded}&f=live"
         open_url(url)
+        print("\n💡 请在浏览器中选择一条推文，然后按回车继续...")
+        try:
+            input()
+        except (KeyboardInterrupt, EOFError):
+            print("\n❌ 已取消")
+            return
+        
+        # 获取当前 Chrome 标签页的 URL
+        script = '''
+        tell application "Google Chrome"
+            tell active tab of window 1
+                return URL
+            end tell
+        end tell
+        '''
+        tweet_url = run_applescript(script)
+        
+        if not tweet_url or 'error' in tweet_url.lower():
+            print("\n❌ 无法获取推文 URL")
+            return
+        
+        print(f"📍 推文 URL: {tweet_url}")
+        
+        # 让用户输入推文内容（用于 AI 生成）
+        print("\n请输入推文内容（前 100 字）:")
+        tweet_text = input("> ").strip()[:200]
+        
+        # 提取作者
+        tweet_author = tweet_url.split('/')[-2] if '/status/' in tweet_url else "user"
+        
+        tweet = {
+            'url': tweet_url,
+            'text': tweet_text,
+            'username': tweet_author,
+            'name': tweet_author,
+            'likes': '0',
+            'replies': '0',
+            'retweets': '0',
+            'views': '0'
+        }
     else:
-        print("\n🏠 Home 模式")
-    
-    tweet = grab_tweet()
+        print("🏠 Home 模式")
+        # 打开 Home 页面
+        open_url("https://twitter.com/home")
+        print("\n💡 请在浏览器中选择一条推文，然后按回车继续...")
+        try:
+            input()
+        except (KeyboardInterrupt, EOFError):
+            print("\n❌ 已取消")
+            return
+        
+        # 获取当前 Chrome 标签页的 URL
+        script = '''
+        tell application "Google Chrome"
+            tell active tab of window 1
+                return URL
+            end tell
+        end tell
+        '''
+        tweet_url = run_applescript(script)
+        
+        if not tweet_url or 'error' in tweet_url.lower():
+            print("\n❌ 无法获取推文 URL")
+            return
+        
+        print(f"📍 推文 URL: {tweet_url}")
+        
+        # 让用户输入推文内容
+        print("\n请输入推文内容（前 100 字）:")
+        tweet_text = input("> ").strip()[:200]
+        
+        tweet_author = tweet_url.split('/')[-2] if '/status/' in tweet_url else "user"
+        
+        tweet = {
+            'url': tweet_url,
+            'text': tweet_text,
+            'username': tweet_author,
+            'name': tweet_author,
+            'likes': '0',
+            'replies': '0',
+            'retweets': '0',
+            'views': '0'
+        }
     
     if not tweet:
         print("\n❌ 流程终止")
         return
     
     # 步骤 2: 生成回复
+    print("\n\n📍 步骤 2: 生成回复建议")
+    print("=" * 60)
     replies = generate_replies(tweet)
     
-    # 步骤 3: 格式化消息
+    # 步骤 3: 发送到 Telegram
+    print("\n\n📍 步骤 3: 发送到 Telegram")
+    print("=" * 60)
+    
     message = format_message(tweet, replies)
     buttons = create_buttons(tweet, replies)
-    
-    # 步骤 4: 发送到 Telegram
-    print("\n" + "=" * 60)
-    print("📤 步骤 4: 发送到 Telegram")
-    print("=" * 60)
     
     msg_id = send_telegram_message(message, buttons)
     
@@ -568,7 +668,7 @@ def main():
     else:
         print("\n✅ 已输出到控制台")
     
-    # 步骤 5: 自动评论选项
+    # 步骤 4: 自动评论选项
     if args.auto:
         print("\n" + "=" * 60)
         print("🤖 自动评论模式")
@@ -591,6 +691,7 @@ def main():
                 confirm = input("是否执行自动评论？[y/N]: ").strip().lower()
                 if confirm in ['y', 'yes']:
                     # 执行自动评论
+                    print("\n🚀 开始自动评论...")
                     auto_comment(tweet.get('url', ''), selected_reply)
                 else:
                     print("\n✅ 已取消自动评论")
