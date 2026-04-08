@@ -1,261 +1,52 @@
-# 🐦 Twitter 自动回复工具
-
-基于 AppleScript + Python 的 Twitter 半自动回复工具，使用真实浏览器模拟真人操作。
-
----
-
-## ✨ 功能特点
-
-- ✅ 使用真实 Chrome 浏览器（非 headless）
-- ✅ 直接利用已登录的 Twitter 账号
-- ✅ 自动抓取 Home 页面第一条推文
-- ✅ 提取完整信息（链接、原文、点赞、评论、转发、浏览）
-- ✅ 自动生成 3 条回复建议
-- ✅ 一键复制 + 打开推文
-- ✅ 模拟真人操作，避免风控
+# Twitter 全自动回复工具集
+零配置、多方案、无风控的Twitter自动回复工具，完全模拟真人操作，不需要X开发者账号/API权限。
 
 ---
-
-## 📦 项目结构
-
-```
-~/twitter-auto-reply/
-├── README.md                    # 本文档
-├── twitter_quick_reply.py       # ⭐ 终端快速版（推荐）
-├── twitter_semi_auto.py         # Telegram 版本
-├── twitter_bot.py               # Telegram Bot 处理器
-├── grab_all_data.applescript    # AppleScript 抓取脚本
-└── manual_input.applescript     # AppleScript 手动输入脚本
-```
+## 📦 包含的版本
+| 文件名 | 方案 | 依赖 | 系统权限要求 | 特点 |
+| --- | --- | --- | --- | --- |
+| `twitter-auto-reply-cdp.py` | **Chrome CDP远程调试方案（推荐）** | Python3 + requests + pychrome | ❌ 无任何系统权限要求 | ✅ 稳定性最高、后台运行不影响使用、操作精准、长期可用 |
+| `twitter-auto-reply-final.sh` | AppleScript模拟键盘操作方案 | bash + curl + jq | ⚠️ 需要开启辅助功能权限 | ✅ 不需要改Chrome启动方式，适合临时使用 |
+| `twitter-auto-reply-simple.sh` | 极简浏览器模拟方案 | bash + curl + jq | ⚠️ 需要开启辅助功能权限 | ✅ 零依赖，逻辑简单易修改 |
+| `twitter-auto-reply.py` | Playwright自动化方案 | Python3 + playwright + requests | ❌ 无系统权限要求 | ✅ 跨平台支持，适合Windows/Linux用户 |
+| `twitter-full-browser-reply.sh` | 全浏览器操作方案 | bash + curl + jq | ⚠️ 需要开启辅助功能权限 | ✅ 完全模拟手动操作流程 |
+| `twitter-human-like-reply.sh` | 模拟真人随机操作方案 | bash + curl + jq | ⚠️ 需要开启辅助功能权限 | ✅ 随机延迟+随机操作间隔，风控概率最低 |
 
 ---
+## ✨ 核心特性
+1. **零开发者权限**：不需要申请X/Twitter开发者账号，不需要API密钥，用你自己Chrome的登录态即可
+2. **自动去重**：已回复的推文ID自动记录，永远不会重复回复同一条
+3. **AI智能回复**：默认对接火山方舟豆包大模型，可自定义回复风格/领域
+4. **真人模拟**：内置随机延迟、随机操作间隔，完全模拟真人操作习惯，几乎不会被风控
+5. **结果通知**：回复完成自动推送通知，包含推文链接+原文+回复内容，随时可校验
 
-## 🚀 快速开始
-
+---
+## 🚀 推荐方案快速开始（CDP版）
 ### 1. 安装依赖
-
 ```bash
-# Python 3（Mac 自带）
-python3 --version
-
-# 无需额外依赖，直接使用
+pip3 install requests pychrome
 ```
-
-### 2. 运行（推荐）
-
+### 2. 配置.env
+在当前目录创建`.env`文件，填入你的豆包API密钥：
+```env
+DOUBO_API_KEY=你的豆包API密钥
+```
+### 3. 运行脚本
 ```bash
-cd ~/twitter-auto-reply
-python3 twitter_quick_reply.py
+python3 twitter-auto-reply-cdp.py
 ```
-
-### 3. 操作流程
-
-```
-1. 脚本自动打开 Twitter Home
-2. 抓取第一条推文（显示链接、原文、互动数据）
-3. 生成 3 条回复建议
-4. 输入数字选择回复（1/2/3）
-5. 自动复制到剪贴板 + 打开推文
-6. 手动粘贴发送
-```
+脚本会自动启动带调试模式的Chrome，全程无需手动操作。
 
 ---
-
-## 📝 使用说明
-
-### 终端快速版
-
-```bash
-python3 twitter_quick_reply.py
-```
-
-**输出示例：**
-
-```
-╔═══════════════════════════════════════════════════════════╗
-║           🐦 Twitter 快速回复                              ║
-╚═══════════════════════════════════════════════════════════╝
-
-👤 用户名 (@username)
-
-📝 推文内容...
-
-📈 👍 1.2K  💬 6  🔄 6  👁️ 1.2K
-
-🔗 链接：https://x.com/username/status/123456789
-
-============================================================
-💡 回复建议（输入数字选择，或按 Enter 跳过）:
-============================================================
-
-  [1] 确实是这样，深有同感~ 👍
-  [2] 第一次见到这种，长见识了！
-  [3] 求更多细节！👀
-
-============================================================
-
-请选择 [1-3]: 
-```
-
-### Telegram 版本
-
-需要配置环境变量：
-
-```bash
-export TELEGRAM_BOT_TOKEN=your_bot_token
-export TELEGRAM_CHAT_ID=your_chat_id
-
-python3 twitter_semi_auto.py
-```
+## ⚙️ 自定义配置
+修改脚本开头的配置项即可：
+- `SEARCH_KEYWORD`：要搜索的领域关键词，比如`"独立开发 AI工具 SaaS"`
+- `REPLY_PROMPT`：自定义回复风格/语气/语言
+- `PROCESSED_IDS_FILE`：已回复ID存储路径
 
 ---
-
-## 🔧 高级用法
-
-### 修改回复模板
-
-编辑 `twitter_quick_reply.py` 中的 `generate_replies()` 函数：
-
-```python
-def generate_replies(tweet):
-    text = tweet.get('text', '')
-    
-    # 自定义回复逻辑
-    if '?' in text:
-        return ["问题型回复 1", "问题型回复 2", "问题型回复 3"]
-    elif '😂' in text:
-        return ["幽默型回复 1", "幽默型回复 2", "幽默型回复 3"]
-    else:
-        return ["通用回复 1", "通用回复 2", "通用回复 3"]
+## 📌 定时运行
+使用OpenClaw cron定时任务每10分钟运行一次：
 ```
-
-### 接入 AI 生成回复
-
-可以接入火山方舟、OpenAI 等：
-
-```python
-import openai
-
-def generate_replies_ai(tweet):
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "生成 3 条 Twitter 回复"},
-            {"role": "user", "content": tweet.get('text')}
-        ]
-    )
-    return response.choices[0].message.content.split('\n')
+/cron add --name "Twitter自动回复" --schedule '{"kind": "every", "everyMs": 600000}' --payload '{"kind": "systemEvent", "text": "cd /your/path/twitter-auto-reply && python3 twitter-auto-reply-cdp.py"}'
 ```
-
----
-
-## ⚠️ 注意事项
-
-### 避免风控
-
-1. **控制频率** - 每天不超过 10-20 条回复
-2. **随机延迟** - 每条间隔 2-4 小时
-3. **真实内容** - 不要回复完全相同的内容
-4. **真人审核** - 半自动模式最安全
-
-### 浏览器要求
-
-- ✅ Google Chrome（推荐）
-- ✅ 需要已登录 Twitter
-- ✅ 保持至少一个 Chrome 窗口打开
-
----
-
-## 🛠️ 故障排除
-
-### 问题 1: 找不到推文
-
-**原因**: Twitter 页面未加载完成
-
-**解决**: 
-```bash
-# 手动打开 Twitter 并登录
-open https://twitter.com/home
-
-# 确保登录后再运行脚本
-```
-
-### 问题 2: AppleScript 权限
-
-**原因**: macOS 需要授权
-
-**解决**: 
-```
-系统偏好设置 → 安全性与隐私 → 隐私 → 自动化
-→ 勾选 Google Chrome
-```
-
-### 问题 3: 复制失败
-
-**原因**: pbcopy 命令问题
-
-**解决**:
-```bash
-# 测试剪贴板
-echo "test" | pbcopy
-pbpaste  # 应该输出 test
-```
-
----
-
-## 📚 技术原理
-
-```
-┌─────────────┐
-│  Python 脚本 │
-└──────┬──────┘
-       │ 生成 AppleScript
-       ▼
-┌─────────────┐
-│ AppleScript │
-└──────┬──────┘
-       │ 控制 Chrome
-       ▼
-┌─────────────┐
-│   Chrome    │
-└──────┬──────┘
-       │ 执行 JavaScript
-       ▼
-┌─────────────┐
-│   Twitter   │
-│  页面交互    │
-└─────────────┘
-```
-
-**核心技术**:
-- `document.execCommand('insertText')` - 模拟真实输入
-- AppleScript - 系统级浏览器控制
-- 随机延迟 - 模拟真人行为
-
----
-
-## 🎯 下一步优化
-
-- [ ] 接入 AI 生成更智能回复
-- [ ] 添加推文筛选条件
-- [ ] 支持多账号切换
-- [ ] 添加回复历史记录
-- [ ] 定时自动运行
-
----
-
-## 📄 License
-
-MIT License
-
----
-
-## 🙏 致谢
-
-- 使用真实浏览器避免风控
-- AppleScript + JavaScript 模拟真人操作
-- 半自动模式保证账号安全
-
----
-
-**Happy Tweeting! 🐦**
